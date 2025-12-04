@@ -1,203 +1,174 @@
-🏡 Tokko Broker: Plataforma de Gestión Inmobiliaria (Back-End)
+🏡 Tokko Broker — Back-End
+Plataforma de Gestión Inmobiliaria (Arquitectura Hexagonal)
 
-Este repositorio contiene la implementación del Back-End para la plataforma de gestión inmobiliaria Tokko Broker, desarrollado bajo la Arquitectura Hexagonal (Ports and Adapters) utilizando Python (Django), PostgreSQL (PostGIS) y Redis para el procesamiento asíncrono.
+Este repositorio contiene la implementación del Back-End de Tokko Broker, una plataforma de gestión inmobiliaria desarrollada utilizando:
 
-El objetivo principal es proveer una API RESTful robusta, segura y escalable, con estricto aislamiento de datos para cada Sucursal (Multitenencia).
+Python (Django)
 
-🏗️ 1. Arquitectura: Hexagonal (Ports and Adapters)
+PostgreSQL + PostGIS
 
-Hemos adoptado la Arquitectura Hexagonal para asegurar que la lógica de negocio (Dominio) sea independiente de la tecnología (Django ORM, APIs externas). Esto facilita las pruebas unitarias y garantiza un bajo acoplamiento.
+Redis (procesamiento asíncrono)
 
-Estructura de Carpetas Clave:
+Arquitectura Hexagonal (Ports & Adapters)
 
-Capa
+Multitenencia por Sucursal
 
-Carpeta Principal
+El objetivo principal es ofrecer una API RESTful robusta, segura y escalable, con estricto aislamiento de datos entre sucursales.
 
-Rol y Enfoque del Código
+🏗️ 1. Arquitectura: Hexagonal (Ports & Adapters)
 
-I. Dominio
+La Arquitectura Hexagonal garantiza que la lógica de negocio (Dominio) permanezca aislada de frameworks, infraestructura y APIs externas.
 
-src/core/domain
+📦 Estructura Principal del Proyecto
+Capa	Carpeta	Descripción
+Dominio	src/core/domain	Reglas de negocio puras. Contiene Entidades (Propiedad, Usuario), Objetos de Valor y Excepciones. Sin Django.
+Aplicación	src/core/application	Casos de Uso (Use Cases). Define Interfaces (Ports). Orquesta flujos como IniciarSesionUC, CargarPropiedadUC.
+Infraestructura	src/infrastructure	Adaptadores: DB (ORM + repositorios), API (controladores), Queue (Celery/Django-Q), Integraciones externas.
+🔁 Principio Fundamental
 
-Reglas de Negocio Puras. Contiene Entidades (Propiedad, Usuario), Objetos de Valor, y Excepciones. No hay código de Django aquí.
+Las dependencias siempre apuntan hacia adentro:
+Infraestructura → Aplicación → Dominio
 
-II. Aplicación
+🔒 2. Seguridad y Multitenencia
 
-src/core/application
+Tokko Broker implementa un modelo estricto de aislamiento de datos por sucursal.
 
-Casos de Uso (Use Cases - UC). Define las Interfaces (Ports) y orquesta el flujo de la aplicación (IniciarSesionUC, CargarPropiedadUC).
+2.1. Aislamiento por Sucursal
 
-III. Infraestructura
+Cada registro crítico contiene un campo obligatorio sucursal_id.
 
-src/infrastructure
+Se implementa un Query Scope Global en los Managers/Repositorios para añadir automáticamente:
 
-Adaptadores (Adapters). Conecta el Core con el mundo exterior: db/ (Django ORM, Repositorios), api/ (Vistas/Controladores), queue/ (Workers de Celery/Django-Q), external/ (Integraciones API).
+WHERE sucursal_id = <ID extraído del token JWT>
 
-Principio Fundamental: Las dependencias siempre apuntan hacia el interior: Infraestructura → Aplicación → Dominio.
 
-🔒 2. Seguridad y Multitenencia (Regla de Oro)
+Aplicado a modelos como:
 
-El sistema opera bajo un esquema de Multitenencia por Sucursal. La seguridad es la máxima prioridad.
+Propiedad
 
-2.1. Aislamiento de Datos por Sucursal
+Contacto
 
-Identificador (Tenant ID): sucursal_id (obligatorio en tablas críticas).
-
-Mecanismo: El desarrollador BK 3 es responsable de implementar un Query Scope Global en los Managers de Django (en la capa de Infraestructura/DB) que automáticamente añade la condición WHERE sucursal_id = [ID del Token] a todas las consultas de lectura y escritura en los modelos sensibles (Propiedad, Contacto, Oportunidad).
+Oportunidad
 
 2.2. Flujo de Autenticación
 
-El token JWT retornado tras el login DEBE incluir el sucursal_id en su payload.
+El endpoint de login genera un JWT que incluye sucursal_id.
 
-Un Middleware de seguridad debe extraer este sucursal_id y ponerlo a disposición del contexto de la petición para que los Repositorios y Use Cases puedan utilizarlo.
+Un Middleware extrae el sucursal_id del token.
 
-🎯 3. Plan de Desarrollo y Módulos del Equipo BK (4 Desarrolladores)
+Los repositorios y casos de uso lo utilizan para filtrar datos.
 
-El desarrollo está organizado en módulos funcionales y asignado de acuerdo al Plan de Trabajo (Sprints 1, 2 y 3).
+🎯 3. Plan de Desarrollo por Módulos (Equipo BK)
 
-Módulo I: Seguridad, Core y Permisos (BK 1, BK 2, BK 3)
+El proyecto se divide en módulos funcionales desarrollados en varios Sprints.
 
-Este módulo es la base y requiere la máxima coordinación para asegurar la coherencia arquitectónica.
+🧩 Módulo I: Seguridad, Core y Permisos
 
-Desarrollador
+Equipo: BK1, BK2, BK3
 
-Enfoque Principal
+Dev	Enfoque	Responsabilidades
+BK 1 (Líder)	Estructura y Persistencia	Configuración inicial, entidades puras (Usuario, Sucursal), repositorios base.
+BK 2	Autenticación	Caso de uso IniciarSesionUC, JWT con sucursal_id, POST /api/auth/login, hashing.
+BK 3	Autorización y Multitenencia	Query Scope Global, middleware de extracción de sucursal_id, permisos y grupos.
+🏘️ Módulo II: Gestión de Inventario
 
-Responsabilidades Clave
+Equipo: BK4, BK1, BK2
 
-BK 1 (Líder)
+Dev	Enfoque	Responsabilidades
+BK 4	CRUD & Multimedia	CrearUsuarioUC, CargarPropiedadUC, subida de multimedia (/media), adaptador S3.
+BK 1	Inventario Avanzado	Entidades avanzadas, repositorios completos, PostGIS para búsquedas geográficas.
+BK 2	Búsqueda	GET /api/properties con filtros avanzados, optimización de queries.
+🔄 Módulo III: Colas, CRM e Integraciones
 
-Estructura y Persistencia
+Equipo: BK3, BK2, BK4
 
-Configuración inicial, Definición de Entidades Puras (Usuario, Sucursal), Implementación de Repositorios base (Adaptadores DB).
-
-BK 2
-
-Autenticación
-
-IniciarSesionUC (Generación de JWT con sucursal_id), POST /api/auth/login, Implementación de Password Hashing.
-
-BK 3
-
-Autorización y Multitenencia
-
-Implementación del Query Scope Global (Aislamiento de Sucursales), Middleware de Extracción de sucursal_id, Implementación de Permiso y GrupoPermisos.
-
-Módulo II: Gestión de Inventario (BK 4, BK 1, BK 2)
-
-Este módulo se centra en las entidades principales de Tokko Broker.
-
-Desarrollador
-
-Enfoque Principal
-
-Responsabilidades Clave
-
-BK 4
-
-CRUD Básico & Multimedia
-
-CrearUsuarioUC, CargarPropiedadUC (primera implementación CRUD), POST /api/properties/{id}/media (Adaptador de Storage S3).
-
-BK 1
-
-Inventario Core Avanzado
-
-Entidades Puras (Propiedad, Emprendimiento), Repositorios completos, Configuración de PostGIS para búsquedas geográficas.
-
-BK 2
-
-Búsqueda y Filtrado
-
-GET /api/properties con filtros avanzados (precio, dormitorios, cercanía geográfica). Optimización de consultas.
-
-Módulo III: Colas, CRM e Integraciones (BK 3, BK 2, BK 4)
-
-Este módulo requiere la implementación de Puertos y Adaptadores de salida para la comunicación asíncrona.
-
-Desarrollador
-
-Enfoque Principal
-
-Responsabilidades Clave
-
-BK 3
-
-Infraestructura de Colas
-
-Configuración de Redis/Celery/Django-Q (Workers), Implementación de la tabla Publicacion (Jobs) [cite: 7.7], Creación del Trigger PublicarPropiedadUC (que encola el Job).
-
-BK 2
-
-CRM
-
-Entidades y Repositorios de Contacto y Oportunidad, Use Cases de gestión de Leads y GET /api/opportunities.
-
-BK 4
-
-Adaptadores de Salida
-
-Adaptador de Integración (Mock de Portal Externo), Adaptador de Servicio de Email/WhatsApp, Lógica para Generar PDF de Ficha (Preparación para notificaciones).
-
-4. Guía de Ejecución y Pruebas
-
+Dev	Enfoque	Responsabilidades
+BK 3	Infraestructura de Colas	Configuración Redis/Celery/Django-Q, tabla Publicacion, UC PublicarPropiedadUC.
+BK 2	CRM	Entidades y repositorios de Contacto y Oportunidad, GET /api/opportunities.
+BK 4	Integraciones Externas	Adaptador de portal externo (Mock), email/WhatsApp, generador de PDF de propiedad.
+🧪 4. Guía de Ejecución y Pruebas
 4.1. Inyección de Dependencias
 
-Se recomienda usar un contenedor de Inversión de Control (IoC) simple o un patrón de Fábrica dentro del Adaptador Web para instanciar los Use Cases, asegurando que siempre se inyecten los Repositorios de Django (Adaptadores de Infraestructura).
+Se recomienda:
+
+Contenedor IoC simple
+
+Patrones Factory dentro del Adaptador Web
+
+Objetivo: instanciar Use Cases siempre con los repositorios correctos.
 
 4.2. Pruebas Unitarias
 
-Foco: La capa de Dominio y Aplicación debe tener una cobertura del 100% de pruebas unitarias.
+Capa de Dominio y Aplicación deben tener 100% de cobertura.
 
-Ventaja Hexagonal: Al ser código Python puro, estas pruebas no necesitan Django ni la base de datos (PostgreSQL), lo que las hace rápidas y confiables.
+No dependen de Django → pruebas rápidas y confiables.
 
 4.3. Pruebas de Integración
 
-Foco: Repositorios (db/repositories.py) y Adaptadores Externos (external/).
+Repositorios DB (db/repositories.py)
 
-Estas pruebas deben validar el mapeo correcto entre las Entidades Puras de Dominio y los Modelos de Django ORM, y la comunicación con servicios simulados (Mocks).
+Adaptadores Externos (external/)
 
-5. Configuración del Entorno de Desarrollo
+Validan:
 
-Clonar Repositorio:
+Mapeo Entidades ⇄ ORM
 
-git clone [https://aws.amazon.com/es/what-is/repo/](https://aws.amazon.com/es/what-is/repo/) tokko-broker-backend
+Comunicación con servicios simulados (Mocks)
+
+🛠️ 5. Configuración del Entorno de Desarrollo
+5.1. Clonar Repositorio
+git clone https://aws.amazon.com/es/what-is/repo/ tokko-broker-backend
 cd tokko-broker-backend
 
-
-Configurar Entorno Virtual:
-
+5.2. Crear Entorno Virtual
 python -m venv venv
-source venv/bin/activate  # o venv\Scripts\activate en Windows
+source venv/bin/activate      # Linux/Mac
+venv\Scripts\activate         # Windows
 pip install -r requirements.txt
 
+5.3. Configuración de Base de Datos
 
-Base de Datos (PostgreSQL + PostGIS):
-Asegúrate de tener un servidor PostgreSQL con la extensión PostGIS habilitada.
+Asegúrate de tener:
 
-Variables de Entorno:
-Copia example.env a .env y rellena las variables, incluyendo:
+PostgreSQL
 
-SECRET_KEY de Django.
+Extensión PostGIS habilitada
 
-Credenciales de DATABASE_URL (PostgreSQL).
+5.4. Variables de Entorno
 
-Credenciales de REDIS_URL (para Colas).
+Copia y renombra:
 
-STORAGE_ADAPTER (S3 o Local).
+cp example.env .env
 
-Ejecutar Migraciones:
 
+Completa:
+
+SECRET_KEY
+
+DATABASE_URL
+
+REDIS_URL
+
+STORAGE_ADAPTER (S3 o local)
+
+5.5. Migraciones
 python manage.py makemigrations
 python manage.py migrate
 
-
-Iniciar Servidor:
-
+5.6. Iniciar Servidor
 python manage.py runserver
 
 
-El API estará disponible en http://127.0.0.1:8000/api/v1/.
+API disponible en:
 
-¡Manos a la obra! El equipo debe comenzar por el Sprint 1 (Seguridad y Core), con BK 1, 2 y 3 sentando las bases de la arquitectura y el flujo de seguridad antes de implementar cualquier funcionalidad de negocio compleja.
+http://127.0.0.1:8000/api/v1/
+
+🚀 Inicio del Desarrollo (Sprint 1)
+
+El equipo BK 1, BK 2 y BK 3 debe comenzar por:
+
+✔ Seguridad
+✔ Core del sistema
+✔ Flujo de autenticación y multitenencia
+
+Antes de construir cualquier módulo avanzado.
